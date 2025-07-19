@@ -1,0 +1,5 @@
+flask
+ultralytics
+werkzeug
+python-dotenv
+opencv-python
