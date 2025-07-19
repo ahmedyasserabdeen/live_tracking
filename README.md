@@ -47,7 +47,7 @@ Upload Video → YOLO Detects Persons → Click Target → Live Stream Tracking
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/your-repository-name/yolov8-live-tracking.git
+git clone https://github.com/ahmedyasserabdeen/live_tracking
 cd yolov8-live-tracking
 ```
 
