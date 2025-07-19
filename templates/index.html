@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLOv8 Tracking App</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            margin-top: 50px;
+        }
+        .card {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .spinner-border {
+            display: none;
+            margin: 20px auto;
+        }
+        .hidden {
+            display: none;
+        }
+        .results {
+            margin-top: 30px;
+        }
+        footer {
+            margin-top: 30px;
+            text-align: center;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card p-4">
+            <h1 class="text-center text-primary">YOLOv8 Tracking Application</h1>
+            <p class="text-center text-muted">Upload your video and let YOLOv8 track it in real-time!</p>
+
+            <form action="/upload" method="post" enctype="multipart/form-data" onsubmit="showLoader()">
+                <div class="mb-3">
+                    <label for="video" class="form-label">Upload a Video:</label>
+                    <input class="form-control" type="file" id="video" name="video" accept="video/*" required>
+                </div>
+                <div class="text-center">
+                    <button type="submit" class="btn btn-primary">Upload and Track</button>
+                </div>
+                <div class="text-center">
+                    <div class="spinner-border text-primary" id="loader" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </form>
+
+            {% if metrics %}
+            <div class="results">
+                <h2 class="text-success">Tracking Summary</h2>
+                <ul class="list-group">
+                    <li class="list-group-item">Total Time: {{ metrics.total_time }} seconds</li>
+                    <li class="list-group-item">Total Frames Processed: {{ metrics.total_frames }}</li>
+                    <li class="list-group-item">Frames Per Second (FPS): {{ metrics.fps }}</li>
+                    <li class="list-group-item">Continuity Issues: {{ metrics.continuity_issues }}</li>
+                    <li class="list-group-item">
+                        <a href="/download/{{ metrics.output_video }}" class="btn btn-success">Download Tracked Video</a>
+                    </li>
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    <footer>
+        <p>© 2024 YOLOv8 Tracking App. All rights reserved.</p>
+    </footer>
+
+    <script>
+        function showLoader() {
+            document.getElementById("loader").style.display = "block";
+        }
+    </script>
+</body>
+</html>

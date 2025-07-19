@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Person to Track</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            margin-top: 30px;
+        }
+        .card {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .canvas-container {
+            position: relative;
+            display: inline-block;
+            border: 2px solid #ddd;
+            margin: 20px 0;
+        }
+        #selectionCanvas {
+            cursor: pointer;
+            display: block;
+        }
+        .instructions {
+            background-color: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .detection-info {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .spinner-border {
+            display: none;
+            margin: 20px auto;
+        }
+        .btn-group {
+            margin: 20px 0;
+        }
+        .selected-bbox {
+            border: 3px solid #28a745 !important;
+            background-color: rgba(40, 167, 69, 0.2) !important;
+        }
+        .detection-bbox {
+            border: 2px solid #007bff;
+            background-color: rgba(0, 123, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .detection-bbox:hover {
+            border: 3px solid #0056b3;
+            background-color: rgba(0, 123, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card p-4">
+            <h1 class="text-center text-primary">Select Person to Track</h1>
+            <p class="text-center text-muted">Click on any detected person to start live tracking</p>
+
+            <div class="instructions">
+                <h5>Instructions:</h5>
+                <ol>
+                    <li>Wait for YOLO to detect all persons in the first frame</li>
+                    <li>Click on the bounding box of the person you want to track</li>
+                    <li>The selected person will be highlighted in green</li>
+                    <li>Click "Start Live Tracking" to begin real-time tracking</li>
+                </ol>
+            </div>
+
+            <div class="text-center">
+                <div id="loadingDetections" class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading detections...</span>
+                </div>
+                <div class="canvas-container" id="canvasContainer" style="display: none;">
+                    <canvas id="selectionCanvas" width="800" height="600"></canvas>
+                </div>
+            </div>
+
+            <div class="detection-info" id="detectionInfo" style="display: none;">
+                <h6>Detection Information:</h6>
+                <p id="detectionDetails">Loading...</p>
+                <div id="selectedInfo" style="display: none;">
+                    <h6 class="text-success">Selected Person:</h6>
+                    <p id="selectedDetails"></p>
+                </div>
+            </div>
+
+            <div class="text-center btn-group">
+                <button type="button" class="btn btn-secondary" onclick="clearSelection()">Clear Selection</button>
+                <button type="button" class="btn btn-success" id="startTrackingBtn" onclick="startLiveTracking()" disabled>Start Live Tracking</button>
+                <a href="/" class="btn btn-outline-secondary">Back to Upload</a>
+            </div>
+
+            <div class="text-center">
+                <div class="spinner-border text-primary" id="trackingLoader" role="status" style="display: none;">
+                    <span class="visually-hidden">Starting tracking...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('selectionCanvas');
+        const ctx = canvas.getContext('2d');
+        const image = new Image();
+        
+        let detections = [];
+        let selectedDetectionId = null;
+        let canvasScale = 1;
+        let frameWidth = 0, frameHeight = 0;
+        
+        // Load the first frame image
+        image.onload = function() {
+            // Calculate canvas size to fit the image while maintaining aspect ratio
+            const maxWidth = 800;
+            const maxHeight = 600;
+            canvasScale = Math.min(maxWidth / image.width, maxHeight / image.height);
+            
+            canvas.width = image.width * canvasScale;
+            canvas.height = image.height * canvasScale;
+            
+            // Draw the image
+            ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+            
+            // Load YOLO detections
+            loadDetections();
+        };
+        
+        image.src = '/static/frames/{{ frame_filename }}';
+
+        // Load YOLO detections for the video
+        async function loadDetections() {
+            try {
+                const response = await fetch('/get_detections/{{ video_filename }}');
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert('Error loading detections: ' + data.error);
+                    return;
+                }
+                
+                detections = data.detections;
+                frameWidth = data.frame_dimensions.width;
+                frameHeight = data.frame_dimensions.height;
+                
+                // Hide loading spinner and show canvas
+                document.getElementById('loadingDetections').style.display = 'none';
+                document.getElementById('canvasContainer').style.display = 'inline-block';
+                
+                // Draw detections
+                drawDetections();
+                
+                // Update info
+                updateDetectionInfo();
+                
+            } catch (error) {
+                console.error('Error loading detections:', error);
+                alert('Failed to load detections. Please try again.');
+            }
+        }
+        
+        function drawDetections() {
+            // Clear canvas and redraw image
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+            
+            // Draw all detections
+            detections.forEach((detection, index) => {
+                const [x, y, width, height] = detection.bbox;
+                
+                // Scale coordinates to canvas size
+                const scaledX = x * canvasScale;
+                const scaledY = y * canvasScale;
+                const scaledWidth = width * canvasScale;
+                const scaledHeight = height * canvasScale;
+                
+                // Choose colors based on selection
+                if (selectedDetectionId === index) {
+                    ctx.strokeStyle = '#28a745'; // Green for selected
+                    ctx.fillStyle = 'rgba(40, 167, 69, 0.2)';
+                    ctx.lineWidth = 3;
+                } else {
+                    ctx.strokeStyle = '#007bff'; // Blue for unselected
+                    ctx.fillStyle = 'rgba(0, 123, 255, 0.1)';
+                    ctx.lineWidth = 2;
+                }
+                
+                // Draw bounding box
+                ctx.setLineDash([]);
+                ctx.fillRect(scaledX, scaledY, scaledWidth, scaledHeight);
+                ctx.strokeRect(scaledX, scaledY, scaledWidth, scaledHeight);
+                
+                // Draw confidence and ID
+                const label = `Person ${index + 1} (${(detection.confidence * 100).toFixed(1)}%)`;
+                ctx.fillStyle = selectedDetectionId === index ? '#28a745' : '#007bff';
+                ctx.font = '14px Arial';
+                ctx.fillText(label, scaledX, scaledY - 5);
+            });
+        }
+        
+        function updateDetectionInfo() {
+            const infoDiv = document.getElementById('detectionInfo');
+            const detailsP = document.getElementById('detectionDetails');
+            
+            if (detections.length > 0) {
+                detailsP.textContent = `Found ${detections.length} person(s) in the first frame. Click on any person to select for tracking.`;
+                infoDiv.style.display = 'block';
+            } else {
+                detailsP.textContent = 'No persons detected in the first frame.';
+                infoDiv.style.display = 'block';
+            }
+        }
+        
+        // Handle canvas clicks
+        canvas.addEventListener('click', function(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clickX = (e.clientX - rect.left) / canvasScale;
+            const clickY = (e.clientY - rect.top) / canvasScale;
+            
+            // Check which detection was clicked
+            for (let i = 0; i < detections.length; i++) {
+                const [x, y, width, height] = detections[i].bbox;
+                
+                if (clickX >= x && clickX <= x + width && 
+                    clickY >= y && clickY <= y + height) {
+                    
+                    selectedDetectionId = i;
+                    drawDetections();
+                    updateSelectedInfo();
+                    document.getElementById('startTrackingBtn').disabled = false;
+                    break;
+                }
+            }
+        });
+        
+        function updateSelectedInfo() {
+            const selectedInfo = document.getElementById('selectedInfo');
+            const selectedDetails = document.getElementById('selectedDetails');
+            
+            if (selectedDetectionId !== null) {
+                const detection = detections[selectedDetectionId];
+                selectedDetails.textContent = 
+                    `Person ${selectedDetectionId + 1} - Confidence: ${(detection.confidence * 100).toFixed(1)}% - ` +
+                    `Position: (${detection.bbox[0]}, ${detection.bbox[1]}) - ` +
+                    `Size: ${detection.bbox[2]}x${detection.bbox[3]}`;
+                selectedInfo.style.display = 'block';
+            } else {
+                selectedInfo.style.display = 'none';
+            }
+        }
+        
+        function clearSelection() {
+            selectedDetectionId = null;
+            drawDetections();
+            document.getElementById('selectedInfo').style.display = 'none';
+            document.getElementById('startTrackingBtn').disabled = true;
+        }
+        
+        async function startLiveTracking() {
+            if (selectedDetectionId === null) {
+                alert('Please select a person first');
+                return;
+            }
+            
+            // Show loading
+            document.getElementById('trackingLoader').style.display = 'block';
+            document.getElementById('startTrackingBtn').disabled = true;
+            
+            try {
+                // Start live tracking
+                const response = await fetch('/start_live_tracking', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        video_filename: '{{ video_filename }}',
+                        detection_id: selectedDetectionId
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // Redirect to live tracking page
+                    window.location.href = `/live_tracking?video_filename={{ video_filename }}&detection_id=${selectedDetectionId}`;
+                } else {
+                    throw new Error(data.error || 'Failed to start tracking');
+                }
+                
+            } catch (error) {
+                console.error('Error starting tracking:', error);
+                alert('Failed to start live tracking. Please try again.');
+                document.getElementById('trackingLoader').style.display = 'none';
+                document.getElementById('startTrackingBtn').disabled = false;
+            }
+        }
+    </script>
+</body>
+</html> 

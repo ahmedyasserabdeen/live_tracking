@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Person Tracking</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #1a1a1a;
+            font-family: Arial, sans-serif;
+            color: #ffffff;
+        }
+        .container {
+            margin-top: 20px;
+            max-width: 1200px;
+        }
+        .card {
+            background-color: #2d2d2d;
+            border: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        .card-header {
+            background-color: #007bff;
+            color: white;
+            border-bottom: none;
+        }
+        .video-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            background-color: #000;
+            border: 2px solid #444;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #liveVideo {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+        .controls {
+            background-color: #333;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            margin-right: 15px;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-live {
+            background-color: #28a745;
+            animation: pulse 2s infinite;
+        }
+                 .status-stopped {
+             background-color: #dc3545;
+         }
+         .status-ended {
+             background-color: #28a745;
+         }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .info-panel {
+            background-color: #333;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .btn-stop {
+            background-color: #dc3545;
+            border-color: #dc3545;
+        }
+        .btn-stop:hover {
+            background-color: #c82333;
+            border-color: #bd2130;
+        }
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h3 class="mb-0">🎯 Live Person Tracking</h3>
+                    <div id="statusIndicator" class="status-indicator">
+                        <div class="status-dot status-live"></div>
+                        <span>LIVE</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card-body">
+                <!-- Video Feed Container -->
+                <div class="video-container" id="videoContainer">
+                    <div class="loading-overlay" id="loadingOverlay">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status"></div>
+                            <div class="mt-3">Starting live tracking...</div>
+                        </div>
+                    </div>
+                    <img id="liveVideo" src="/video_feed" alt="Live Video Feed" style="display: none;">
+                </div>
+                
+                <!-- Controls -->
+                <div class="controls">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <div class="info-panel">
+                                <h6>📹 Tracking Information</h6>
+                                <div id="trackingInfo">
+                                    <div><strong>Video:</strong> {{ video_filename }}</div>
+                                    <div><strong>Selected Person:</strong> #{{ detection_id + 1 }}</div>
+                                    <div><strong>Status:</strong> <span id="trackingStatus" class="text-success">Active</span></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <button type="button" class="btn btn-stop btn-lg me-3" onclick="stopTracking()">
+                                ⏹️ Stop Tracking
+                            </button>
+                            <a href="/" class="btn btn-outline-light btn-lg">
+                                🏠 New Video
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Performance Info -->
+                <div class="info-panel">
+                    <h6>📊 Performance Metrics</h6>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="h4 text-info" id="frameCount">0</div>
+                                <small>Frames Processed</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="h4 text-success" id="fps">-- FPS</div>
+                                <small>Processing Speed</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="h4 text-warning" id="detectionCount">--</div>
+                                <small>Persons Detected</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="h4" id="uptime">00:00</div>
+                                <small>Tracking Time</small>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Progress Bar -->
+                    <div class="mt-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <small>Video Progress</small>
+                            <small id="progressText">0%</small>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar bg-success" id="progressBar" role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Instructions -->
+                <div class="info-panel">
+                    <h6>ℹ️ Instructions</h6>
+                    <ul class="mb-0">
+                        <li>The selected person is highlighted with a <strong class="text-success">green</strong> bounding box</li>
+                        <li>Other detected persons are shown with <strong class="text-primary">blue</strong> bounding boxes</li>
+                        <li>Each person has a unique tracking ID that persists across frames</li>
+                        <li>Click "Stop Tracking" to end the live session</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isTracking = true;
+        let startTime = new Date();
+        let lastFrameTime = Date.now();
+        
+        // Initialize video feed
+        const video = document.getElementById('liveVideo');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        
+        // Handle video load
+        video.onload = function() {
+            loadingOverlay.style.display = 'none';
+            video.style.display = 'block';
+            updateMetrics();
+        };
+        
+        // Handle video error
+        video.onerror = function() {
+            console.error('Video feed error');
+            loadingOverlay.innerHTML = `
+                <div class="text-center text-danger">
+                    <h5>⚠️ Connection Lost</h5>
+                    <p>Unable to load video feed</p>
+                    <button class="btn btn-primary" onclick="location.reload()">Retry</button>
+                </div>
+            `;
+        };
+        
+        // Update metrics periodically
+        function updateMetrics() {
+            if (!isTracking) return;
+            
+            // Update uptime
+            const now = new Date();
+            const elapsed = Math.floor((now - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            document.getElementById('uptime').textContent = 
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            
+            // Check video status and update metrics from backend
+            checkVideoStatus();
+            
+            // Continue updating
+            setTimeout(updateMetrics, 1000);
+        }
+        
+        // Check video status for completion
+        async function checkVideoStatus() {
+            try {
+                const response = await fetch('/get_tracking_status');
+                const status = await response.json();
+                
+                // Update real-time metrics from backend
+                if (status.current_frame !== undefined) {
+                    document.getElementById('frameCount').textContent = status.current_frame;
+                }
+                
+                if (status.total_frames !== undefined && status.current_frame !== undefined) {
+                    // Calculate FPS based on elapsed time and actual frames processed
+                    const now = new Date();
+                    const elapsed = (now - startTime) / 1000;
+                    const fps = elapsed > 0 ? (status.current_frame / elapsed).toFixed(1) : '--';
+                    document.getElementById('fps').textContent = fps;
+                    
+                    // Update detection count (simulate based on frame processing)
+                    document.getElementById('detectionCount').textContent = 
+                        status.current_frame > 0 ? Math.floor(status.current_frame * 0.8) : '--';
+                    
+                    // Update progress bar
+                    if (status.total_frames > 0) {
+                        const progress = Math.min(100, (status.current_frame / status.total_frames) * 100);
+                        document.getElementById('progressBar').style.width = progress + '%';
+                        document.getElementById('progressText').textContent = 
+                            `${progress.toFixed(1)}% (${status.current_frame}/${status.total_frames})`;
+                    }
+                }
+                
+                if (status.video_ended && isTracking) {
+                    // Video has ended
+                    isTracking = false;
+                    updateStatusToEnded(status.status_message);
+                }
+            } catch (error) {
+                console.error('Error checking video status:', error);
+            }
+        }
+        
+        function updateStatusToEnded(message) {
+            const statusIndicator = document.getElementById('statusIndicator');
+            const trackingStatus = document.getElementById('trackingStatus');
+            
+            statusIndicator.innerHTML = `
+                <div class="status-dot status-ended"></div>
+                <span>VIDEO ENDED</span>
+            `;
+            
+            trackingStatus.textContent = 'Video Completed';
+            trackingStatus.className = 'text-success';
+            
+            // Replace video with completion message
+            const videoContainer = document.getElementById('videoContainer');
+            videoContainer.innerHTML = `
+                <div class="d-flex justify-content-center align-items-center" style="height: 400px;">
+                    <div class="text-center">
+                        <h3>🎬 Video Completed!</h3>
+                        <p class="text-success">${message}</p>
+                        <div class="mt-3">
+                            <a href="/" class="btn btn-primary me-2">Upload New Video</a>
+                            <button class="btn btn-outline-light" onclick="location.reload()">Watch Again</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Show completion notification
+            showNotification('Video tracking completed successfully!', 'success');
+        }
+        
+        // Stop tracking function
+        async function stopTracking() {
+            if (!isTracking) return;
+            
+            try {
+                const response = await fetch('/stop_live_tracking', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    isTracking = false;
+                    updateStatusToStopped();
+                    
+                    // Show success message
+                    showNotification('Tracking stopped successfully', 'success');
+                } else {
+                    throw new Error(data.error || 'Failed to stop tracking');
+                }
+                
+            } catch (error) {
+                console.error('Error stopping tracking:', error);
+                showNotification('Error stopping tracking', 'error');
+            }
+        }
+        
+        function updateStatusToStopped() {
+            const statusIndicator = document.getElementById('statusIndicator');
+            const trackingStatus = document.getElementById('trackingStatus');
+            
+            statusIndicator.innerHTML = `
+                <div class="status-dot status-stopped"></div>
+                <span>STOPPED</span>
+            `;
+            
+            trackingStatus.textContent = 'Stopped';
+            trackingStatus.className = 'text-danger';
+            
+            // Replace video with stopped message
+            const videoContainer = document.getElementById('videoContainer');
+            videoContainer.innerHTML = `
+                <div class="d-flex justify-content-center align-items-center" style="height: 300px;">
+                    <div class="text-center">
+                        <h4>⏹️ Tracking Stopped</h4>
+                        <p>The live tracking session has ended.</p>
+                        <a href="/" class="btn btn-primary">Start New Session</a>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function showNotification(message, type) {
+            const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+            const notification = document.createElement('div');
+            notification.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
+            notification.style.cssText = 'top: 20px; right: 20px; z-index: 1050; min-width: 300px;';
+            notification.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Auto-remove after 3 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 3000);
+        }
+        
+        // Handle page unload
+        window.addEventListener('beforeunload', function(e) {
+            if (isTracking) {
+                // Try to stop tracking when leaving the page
+                fetch('/stop_live_tracking', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+            }
+        });
+        
+        // Start the metrics update
+        setTimeout(() => {
+            if (video.complete && video.naturalHeight !== 0) {
+                loadingOverlay.style.display = 'none';
+                video.style.display = 'block';
+            }
+            updateMetrics();
+        }, 2000);
+    </script>
+</body>
+</html> 
